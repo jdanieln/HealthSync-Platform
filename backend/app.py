@@ -104,6 +104,7 @@ def verify_token(f):
                 g.user = user_doc.to_dict()
                 g.user['uid'] = uid
                 print(f"DEBUG: verify_token - User found in Firestore. Role: {g.user.get('role')}")
+            else:
                 # Fallback: check if doc exists by email (Admin created user but with different Auth UID)
                 req_json = request.get_json(silent=True) or {}
                 email_to_check = req_json.get('email')
@@ -116,10 +117,10 @@ def verify_token(f):
                         g.user['original_uid'] = matched_doc.id # Keep a reference to merge later
                         print(f"DEBUG: verify_token - User found by EMAIL. Role: {g.user.get('role')}")
                     else:
-                        print(f"DEBUG: verify_token - User {uid} NOT found in Firestore.")
+                        print(f"DEBUG: verify_token - User {uid} NOT found in Firestore by UID or Email.")
                         g.user = {'uid': uid, 'role': 'GUEST'}
                 else:
-                    print(f"DEBUG: verify_token - User {uid} NOT found in Firestore.")
+                    print(f"DEBUG: verify_token - User {uid} NOT found in Firestore. No email provided for fallback.")
                     g.user = {'uid': uid, 'role': 'GUEST'}
                 
             return f(*args, **kwargs)
@@ -346,6 +347,8 @@ def create_diagnosis():
         return jsonify({'error': 'Missing required fields (patientId, symptoms, diagnosis)'}), 400
         
     try:
+        appointment_id = data.get('appointmentId')
+        
         # Verify the patient actually exists
         patient_ref = db.collection('users').document(patient_uid)
         patient_doc = patient_ref.get()
@@ -360,11 +363,21 @@ def create_diagnosis():
             'symptoms': symptoms,
             'diagnosis': diagnosis_text,
             'prescription': prescription or '',
+            'appointmentId': appointment_id,
             'createdAt': firestore.SERVER_TIMESTAMP
         }
         
+        # Start a batch to ensure atomicity if needed, or just sequential updates
         _, doc_ref = db.collection('diagnoses').add(new_diagnosis)
-        return jsonify({'message': 'Diagnosis created successfully', 'id': doc_ref.id}), 201
+        
+        # If there's an appointment, mark it as COMPLETED
+        if appointment_id:
+            db.collection('appointments').document(appointment_id).update({
+                'status': 'COMPLETED',
+                'updatedAt': firestore.SERVER_TIMESTAMP
+            })
+            
+        return jsonify({'message': 'Diagnosis created and appointment completed', 'id': doc_ref.id}), 201
         
     except Exception as e:
         print(f"Error creating diagnosis: {e}")
@@ -391,7 +404,8 @@ def get_patient_diagnoses(patient_uid):
          return jsonify({'error': 'Forbidden', 'message': 'Insufficient Permissions'}), 403
 
     try:
-        diagnoses_ref = db.collection('diagnoses').where('patientId', '==', patient_uid).order_by('createdAt', direction=firestore.Query.DESCENDING)
+        # Remove order_by to avoid index requirement; sort in memory instead
+        diagnoses_ref = db.collection('diagnoses').where('patientId', '==', patient_uid)
         docs = diagnoses_ref.stream()
         
         diagnoses = []
@@ -399,6 +413,10 @@ def get_patient_diagnoses(patient_uid):
             item = doc.to_dict()
             item['id'] = doc.id
             diagnoses.append(item)
+            
+        # Sort in memory by createdAt descending
+        # SERVER_TIMESTAMP fields become datetime objects when to_dict() is called
+        diagnoses.sort(key=lambda x: x.get('createdAt').timestamp() if x.get('createdAt') else 0, reverse=True)
             
         return jsonify(diagnoses), 200
         
@@ -425,6 +443,99 @@ def list_patients():
     except Exception as e:
          print(f"Error listing patients: {e}")
          return jsonify({'error': str(e)}), 500
+
+
+# --- Appointments Endpoints ---
+
+@app.route('/api/appointments', methods=['POST'])
+@verify_token
+@role_required(['PATIENT'])
+def create_appointment():
+    """Patient requests an appointment."""
+    data = request.json
+    date = data.get('date') # Format: YYYY-MM-DD
+    time = data.get('time') # Format: HH:MM
+    reason = data.get('reason', '')
+    
+    if not all([date, time]):
+        return jsonify({'error': 'Missing date or time'}), 400
+        
+    try:
+        new_appointment = {
+            'patientId': g.user['uid'],
+            'patientName': g.user.get('displayName', 'Unknown Patient'),
+            'patientEmail': g.user.get('email'),
+            'date': date,
+            'time': time,
+            'reason': reason,
+            'status': 'PENDING',
+            'createdAt': firestore.SERVER_TIMESTAMP
+        }
+        
+        _, doc_ref = db.collection('appointments').add(new_appointment)
+        return jsonify({'message': 'Appointment requested successfully', 'id': doc_ref.id}), 201
+    except Exception as e:
+        print(f"Error creating appointment: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/appointments', methods=['GET'])
+@verify_token
+def list_appointments():
+    """List appointments based on role."""
+    user_role = g.user.get('role')
+    user_uid = g.user['uid']
+    
+    try:
+        if user_role == 'PATIENT':
+            # Patient only sees their own
+            query = db.collection('appointments').where('patientId', '==', user_uid)
+        else:
+            # Doctors/Admins see all
+            query = db.collection('appointments')
+            
+        docs = query.stream()
+        appointments = []
+        for doc in docs:
+            item = doc.to_dict()
+            item['id'] = doc.id
+            appointments.append(item)
+            
+        # In-memory sort by date and time (descending)
+        appointments.sort(key=lambda x: (x.get('date', ''), x.get('time', '')), reverse=True)
+        
+        return jsonify(appointments), 200
+    except Exception as e:
+        print(f"Error listing appointments: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/appointments/<appointment_id>', methods=['PUT'])
+@verify_token
+@role_required(['SUPER_ADMIN', 'DOCTOR'])
+def update_appointment_status(appointment_id):
+    """Update appointment status (APPROVED, REJECTED, COMPLETED)."""
+    data = request.json
+    new_status = data.get('status')
+    
+    ALLOWED_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED']
+    if new_status not in ALLOWED_STATUSES:
+        return jsonify({'error': 'Invalid status', 'allowed': ALLOWED_STATUSES}), 400
+        
+    try:
+        app_ref = db.collection('appointments').document(appointment_id)
+        if not app_ref.get().exists:
+            return jsonify({'error': 'Appointment not found'}), 404
+            
+        app_ref.update({
+            'status': new_status,
+            'updatedAt': firestore.SERVER_TIMESTAMP,
+            'processedBy': g.user['uid'],
+            'processedByName': g.user.get('displayName', 'Unknown')
+        })
+        
+        return jsonify({'message': f'Appointment status updated to {new_status}'})
+    except Exception as e:
+        print(f"Error updating appointment: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

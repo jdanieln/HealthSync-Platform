@@ -1,43 +1,45 @@
-import { useState, useEffect, useCallback } from "react";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import SidebarLayout from "./components/SidebarLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Unauthorized from "./pages/Unauthorized";
 import AdminDashboard from "./pages/AdminDashboard";
 import DoctorDiagnoses from "./pages/DoctorDiagnoses";
 import PatientHistory from "./pages/PatientHistory";
+import PatientAppointments from "./pages/PatientAppointments";
+import DoctorAppointments from "./pages/DoctorAppointments";
 
 function Home() {
-  const { currentUser, userRole, logout } = useAuth();
+  const { currentUser, userRole, loading } = useAuth();
+  
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+        <p className="text-gray-600 font-medium">Verificando sesión...</p>
+      </div>
+    </div>
+  );
 
+  if (!currentUser) {
+    return <Navigate to="/login" />;
+  }
+
+  // If user is logged in, redirect based on role
+  if (userRole === 'PATIENT') return <Navigate to="/patient/appointments" />;
+  if (userRole === 'DOCTOR') return <Navigate to="/doctor/appointments" />;
+  if (userRole === 'SUPER_ADMIN') return <Navigate to="/admin/dashboard" />;
+  if (userRole === 'ASSISTANT') return <Navigate to="/doctor/appointments" />; // Fallback until assistant page exists
+
+  // Fallback for authenticated but unhandled role
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-md">
-        <h1 className="text-3xl font-bold text-blue-600 mb-2">Clinical Connect</h1>
-
-        {currentUser ? (
-          <div className="mt-4">
-            <p className="text-gray-800">Welcome, <span className="font-semibold">{currentUser.displayName}</span></p>
-            <p className="text-sm text-gray-500 mb-4">Role: <span className="font-mono bg-gray-200 px-1 rounded">{userRole || 'Loading...'}</span></p>
-
-            <button onClick={logout} className="w-full bg-red-500 text-white py-2 rounded mb-4 hover:bg-red-600">Logout</button>
-
-            <div className="border-t pt-4 text-left">
-              <p className="font-semibold mb-2">Quick Links:</p>
-              <ul className="list-disc pl-5 text-blue-600 space-y-1">
-                <li><Link to="/patient/history">My History (Patient)</Link></li>
-                <li><Link to="/doctor/diagnoses">Diagnoses (Doctor)</Link></li>
-                <li><Link to="/admin/dashboard">Admin Dashboard (Super Admin)</Link></li>
-              </ul>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-6">
-            <p className="mb-4 text-gray-600">Please log in to continue.</p>
-            <Link to="/login" className="block w-full bg-blue-600 text-white text-center py-2 rounded hover:bg-blue-700">Go to Login</Link>
-          </div>
-        )}
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="bg-white p-8 rounded-xl shadow-lg text-center max-w-md">
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">Hola, {currentUser.displayName}</h2>
+        <p className="text-gray-600 mb-6">Tu perfil está configurado como <span className="font-mono bg-gray-100 px-2 py-1 rounded text-indigo-600">{userRole}</span>, pero aún no tienes una pantalla de inicio asignada.</p>
+        <p className="text-gray-500 text-sm italic">Contacta al administrador si crees que esto es un error.</p>
+        <button onClick={() => window.location.href='/login'} className="mt-8 text-indigo-600 hover:underline">Volver al inicio</button>
       </div>
     </div>
   );
@@ -58,7 +60,15 @@ function App() {
             path="/patient/history"
             element={
               <ProtectedRoute allowedRoles={['PATIENT', 'SUPER_ADMIN']}>
-                <PatientHistory />
+                <SidebarLayout><PatientHistory /></SidebarLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/appointments"
+            element={
+              <ProtectedRoute allowedRoles={['PATIENT', 'SUPER_ADMIN']}>
+                <SidebarLayout><PatientAppointments /></SidebarLayout>
               </ProtectedRoute>
             }
           />
@@ -66,7 +76,15 @@ function App() {
             path="/doctor/diagnoses"
             element={
               <ProtectedRoute allowedRoles={['DOCTOR', 'SUPER_ADMIN']}>
-                <DoctorDiagnoses />
+                <SidebarLayout><DoctorDiagnoses /></SidebarLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/appointments"
+            element={
+              <ProtectedRoute allowedRoles={['DOCTOR', 'SUPER_ADMIN']}>
+                <SidebarLayout><DoctorAppointments /></SidebarLayout>
               </ProtectedRoute>
             }
           />
@@ -74,7 +92,7 @@ function App() {
             path="/admin/dashboard"
             element={
               <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
-                <AdminDashboard />
+                <SidebarLayout><AdminDashboard /></SidebarLayout>
               </ProtectedRoute>
             }
           />

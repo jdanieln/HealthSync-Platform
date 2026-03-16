@@ -50,21 +50,18 @@ export function AuthProvider({ children }) {
                     if (response.ok) {
                         const data = await response.json();
                         console.log("DEBUG: Role fetched:", data.role);
-                        setUserRole(data.role);
+                        setUserRole(data.role || 'PATIENT');
                     } else {
                         console.error("Failed to sync user role");
-                        // Fallback or handle error
                         setUserRole('PATIENT');
                     }
                 } catch (error) {
                     console.error("Error fetching user role:", error);
-                    alert(`Error syncing role: ${error.message}`);
                     setUserRole('PATIENT');
                 }
             } else {
                 setUserRole(null);
             }
-
             setLoading(false);
         });
 
