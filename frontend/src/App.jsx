@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Link, Navigate } from "react-ro
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import SidebarLayout from "./components/SidebarLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { NotificationProvider } from "./context/NotificationContext";
 import Login from "./pages/Login";
 import Unauthorized from "./pages/Unauthorized";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -45,7 +46,7 @@ function Home() {
   );
 }
 
-import { NotificationProvider } from "./context/NotificationContext";
+
 
 function App() {
   return (
