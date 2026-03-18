@@ -45,59 +45,63 @@ function Home() {
   );
 }
 
+import { NotificationProvider } from "./context/NotificationContext";
+
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/unauthorized" element={<Unauthorized />} />
+      <NotificationProvider>
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/unauthorized" element={<Unauthorized />} />
 
-          <Route path="/" element={<Home />} />
+            <Route path="/" element={<Home />} />
 
-          {/* Protected Routes */}
-          <Route
-            path="/patient/history"
-            element={
-              <ProtectedRoute allowedRoles={['PATIENT', 'SUPER_ADMIN']}>
-                <SidebarLayout><PatientHistory /></SidebarLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/patient/appointments"
-            element={
-              <ProtectedRoute allowedRoles={['PATIENT', 'SUPER_ADMIN']}>
-                <SidebarLayout><PatientAppointments /></SidebarLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/doctor/diagnoses"
-            element={
-              <ProtectedRoute allowedRoles={['DOCTOR', 'SUPER_ADMIN']}>
-                <SidebarLayout><DoctorDiagnoses /></SidebarLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/doctor/appointments"
-            element={
-              <ProtectedRoute allowedRoles={['DOCTOR', 'SUPER_ADMIN']}>
-                <SidebarLayout><DoctorAppointments /></SidebarLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/dashboard"
-            element={
-              <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
-                <SidebarLayout><AdminDashboard /></SidebarLayout>
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </Router>
+            {/* Protected Routes */}
+            <Route
+              path="/patient/history"
+              element={
+                <ProtectedRoute allowedRoles={['PATIENT', 'SUPER_ADMIN']}>
+                  <SidebarLayout><PatientHistory /></SidebarLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/patient/appointments"
+              element={
+                <ProtectedRoute allowedRoles={['PATIENT', 'SUPER_ADMIN']}>
+                  <SidebarLayout><PatientAppointments /></SidebarLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/doctor/diagnoses"
+              element={
+                <ProtectedRoute allowedRoles={['DOCTOR', 'SUPER_ADMIN']}>
+                  <SidebarLayout><DoctorDiagnoses /></SidebarLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/doctor/appointments"
+              element={
+                <ProtectedRoute allowedRoles={['DOCTOR', 'SUPER_ADMIN']}>
+                  <SidebarLayout><DoctorAppointments /></SidebarLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                  <SidebarLayout><AdminDashboard /></SidebarLayout>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </Router>
+      </NotificationProvider>
     </AuthProvider>
   )
 }

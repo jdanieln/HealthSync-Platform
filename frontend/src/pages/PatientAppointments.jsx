@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
 
 export default function PatientAppointments() {
     const [appointments, setAppointments] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({ date: "", time: "", reason: "" });
     const { currentUser } = useAuth();
+    const { showNotification } = useNotification();
 
     const fetchAppointments = useCallback(async () => {
         if (!currentUser) return;
@@ -52,14 +51,14 @@ export default function PatientAppointments() {
             if (res.ok) {
                 setFormData({ date: "", time: "", reason: "" });
                 fetchAppointments();
-                alert("Cita solicitada correctamente.");
+                showNotification("Cita solicitada correctamente.", "success");
             } else {
                 const errData = await res.json();
-                alert(`Error: ${errData.error}`);
+                showNotification(`Error: ${errData.error}`, "error");
             }
         } catch (err) {
             console.error("Error creating appointment", err);
-            alert("Error al solicitar la cita.");
+            showNotification("Error al solicitar la cita.", "error");
         } finally {
             setIsSubmitting(false);
         }

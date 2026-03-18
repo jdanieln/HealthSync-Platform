@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
 
 export default function AdminDashboard() {
     const [users, setUsers] = useState([]);
@@ -10,6 +9,7 @@ export default function AdminDashboard() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const { currentUser } = useAuth();
+    const { showNotification, showConfirm } = useNotification();
 
     const fetchUsers = useCallback(async () => {
         if (!currentUser) return;
@@ -81,15 +81,16 @@ export default function AdminDashboard() {
             });
 
             if (res.ok) {
-                fetchUsers();
+                await fetchUsers();
                 closeModal();
+                showNotification(`Usuario ${modalMode === 'create' ? 'creado' : 'actualizado'} correctamente.`, "success");
             } else {
                 const errData = await res.json();
-                alert(`Error: ${errData.error || 'Fallo al guardar usuario'}`);
+                showNotification(`Error: ${errData.error || 'Fallo al guardar usuario'}`, "error");
             }
         } catch (err) {
             console.error("Error saving user", err);
-            alert("Error al guardar usuario.");
+            showNotification("Error al guardar usuario.", "error");
         } finally {
             setIsSubmitting(false);
         }
@@ -97,7 +98,15 @@ export default function AdminDashboard() {
 
     const handleDelete = async (uid) => {
         if (!currentUser || isSubmitting) return;
-        if (!window.confirm("¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.")) return;
+        
+        const confirmed = await showConfirm(
+            "Eliminar Usuario",
+            "¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.",
+            "Eliminar",
+            "Cancelar"
+        );
+        
+        if (!confirmed) return;
 
         setIsSubmitting(true);
         const token = await currentUser.getIdToken();
@@ -109,9 +118,10 @@ export default function AdminDashboard() {
 
             if (res.ok) {
                 await fetchUsers();
+                showNotification("Usuario eliminado correctamente.", "success");
             } else {
                 const errData = await res.json();
-                alert(`No se pudo eliminar el usuario: ${errData.error}`);
+                showNotification(`No se pudo eliminar el usuario: ${errData.error}`, "error");
             }
         } catch (err) {
             console.error("Error deleting user", err);

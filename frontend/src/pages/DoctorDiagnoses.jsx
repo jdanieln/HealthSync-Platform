@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
 
 export default function DoctorDiagnoses() {
     const [patients, setPatients] = useState([]);
@@ -12,6 +11,7 @@ export default function DoctorDiagnoses() {
     const [formData, setFormData] = useState({ symptoms: "", diagnosis: "", prescription: "" });
 
     const { currentUser } = useAuth();
+    const { showNotification } = useNotification();
 
     const fetchPatients = useCallback(async () => {
         if (!currentUser) return;
@@ -113,14 +113,15 @@ export default function DoctorDiagnoses() {
             if (res.ok) {
                 setFormData({ symptoms: "", diagnosis: "", prescription: "" });
                 setSelectedAppointmentId("");
-                fetchPatientData(selectedPatient.uid);
+                await fetchPatientData(selectedPatient.uid);
+                showNotification("Diagnóstico guardado correctamente.", "success");
             } else {
                 const errData = await res.json();
-                alert(`Error: ${errData.error}`);
+                showNotification(`Error: ${errData.error}`, "error");
             }
         } catch (err) {
             console.error("Error creating diagnosis", err);
-            alert("Error creating diagnosis.");
+            showNotification("Error al guardar el diagnóstico.", "error");
         } finally {
             setIsSubmitting(false);
         }

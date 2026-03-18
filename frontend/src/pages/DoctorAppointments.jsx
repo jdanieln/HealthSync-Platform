@@ -1,6 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
 
 export default function DoctorAppointments() {
     const [appointments, setAppointments] = useState([]);
@@ -10,6 +8,7 @@ export default function DoctorAppointments() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const { currentUser } = useAuth();
+    const { showNotification } = useNotification();
 
     const fetchAppointments = useCallback(async () => {
         if (!currentUser) return;
@@ -47,8 +46,9 @@ export default function DoctorAppointments() {
 
             if (res.ok) {
                 await fetchAppointments();
+                showNotification(`Cita ${newStatus === 'APPROVED' ? 'aprobada' : 'rechazada'} correctamente.`, "success");
             } else {
-                alert("Error al actualizar la cita.");
+                showNotification("Error al actualizar la cita.", "error");
             }
         } catch (err) {
             console.error("Error updating appointment", err);
@@ -87,10 +87,11 @@ export default function DoctorAppointments() {
 
             if (res.ok) {
                 setIsDiagModalOpen(false);
-                fetchAppointments();
+                await fetchAppointments();
+                showNotification("Diagnóstico registrado correctamente.", "success");
             } else {
                 const errData = await res.json();
-                alert(`Error: ${errData.error}`);
+                showNotification(`Error: ${errData.error}`, "error");
             }
         } catch (err) {
             console.error("Error saving diagnosis", err);
