@@ -32,7 +32,8 @@ export default function DoctorAppointments() {
     }, [fetchAppointments]);
 
     const handleUpdateStatus = async (appointmentId, newStatus) => {
-        if (!currentUser) return;
+        if (!currentUser || isSubmitting) return;
+        setIsSubmitting(true);
         const token = await currentUser.getIdToken();
         try {
             const res = await fetch(`${import.meta.env.VITE_API_URL}/api/appointments/${appointmentId}`, {
@@ -45,12 +46,14 @@ export default function DoctorAppointments() {
             });
 
             if (res.ok) {
-                fetchAppointments();
+                await fetchAppointments();
             } else {
                 alert("Error al actualizar la cita.");
             }
         } catch (err) {
             console.error("Error updating appointment", err);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -149,17 +152,34 @@ export default function DoctorAppointments() {
                                         {app.status}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
                                     {app.status === 'PENDING' && (
                                         <>
-                                            <button onClick={() => handleUpdateStatus(app.id, 'APPROVED')} className="text-green-600 hover:text-green-900 font-bold">Aprobar</button>
-                                            <button onClick={() => handleUpdateStatus(app.id, 'REJECTED')} className="text-red-600 hover:text-red-900 font-bold">Rechazar</button>
+                                            <button 
+                                                disabled={isSubmitting} 
+                                                onClick={() => handleUpdateStatus(app.id, 'APPROVED')} 
+                                                className="text-green-600 hover:text-green-900 font-bold disabled:opacity-50 inline-flex items-center"
+                                            >
+                                                {isSubmitting ? (
+                                                    <svg className="animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                ) : '✓'} Aprobar
+                                            </button>
+                                            <button 
+                                                disabled={isSubmitting} 
+                                                onClick={() => handleUpdateStatus(app.id, 'REJECTED')} 
+                                                className="text-red-600 hover:text-red-900 font-bold disabled:opacity-50 inline-flex items-center"
+                                            >
+                                                {isSubmitting ? (
+                                                    <svg className="animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                ) : '✕'} Rechazar
+                                            </button>
                                         </>
                                     )}
                                     {app.status === 'APPROVED' && (
                                         <button 
+                                            disabled={isSubmitting}
                                             onClick={() => openDiagnosisModal(app)} 
-                                            className="bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 transition font-bold text-sm shadow-sm"
+                                            className="bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 transition font-bold text-sm shadow-sm disabled:opacity-50"
                                         >
                                             Completar y Diagnosticar
                                         </button>

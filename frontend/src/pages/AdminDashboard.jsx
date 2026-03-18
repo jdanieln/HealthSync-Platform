@@ -96,9 +96,10 @@ export default function AdminDashboard() {
     };
 
     const handleDelete = async (uid) => {
-        if (!currentUser) return;
+        if (!currentUser || isSubmitting) return;
         if (!window.confirm("¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.")) return;
 
+        setIsSubmitting(true);
         const token = await currentUser.getIdToken();
         try {
             const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/users/${uid}`, {
@@ -107,13 +108,15 @@ export default function AdminDashboard() {
             });
 
             if (res.ok) {
-                fetchUsers();
+                await fetchUsers();
             } else {
                 const errData = await res.json();
                 alert(`No se pudo eliminar el usuario: ${errData.error}`);
             }
         } catch (err) {
             console.error("Error deleting user", err);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -160,18 +163,22 @@ export default function AdminDashboard() {
                                         {user.role}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 space-x-2">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 space-x-3">
                                     <button
+                                        disabled={isSubmitting}
                                         onClick={() => openEditModal(user)}
-                                        className="text-indigo-600 hover:text-indigo-900 font-medium"
+                                        className="text-indigo-600 hover:text-indigo-900 font-bold disabled:opacity-50"
                                     >
                                         Editar
                                     </button>
                                     <button
+                                        disabled={isSubmitting}
                                         onClick={() => handleDelete(user.uid)}
-                                        className="text-red-600 hover:text-red-900 font-medium"
+                                        className="text-red-600 hover:text-red-900 font-bold disabled:opacity-50 inline-flex items-center"
                                     >
-                                        Eliminar
+                                        {isSubmitting ? (
+                                            <svg className="animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                        ) : '🗑'} Eliminar
                                     </button>
                                 </td>
                             </tr>
@@ -211,7 +218,15 @@ export default function AdminDashboard() {
                             </div>
                             <div className="flex justify-end space-x-3 mt-6">
                                 <button type="button" onClick={closeModal} disabled={isSubmitting} className="bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 transition disabled:opacity-50">Cancelar</button>
-                                <button type="submit" disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition disabled:opacity-50 flex items-center justify-center min-w-[120px]">
+                                <button type="submit" disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition disabled:opacity-50 flex items-center justify-center gap-2 min-w-[140px] font-bold shadow-sm">
+                                    {isSubmitting ? (
+                                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    ) : (
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                                    )}
                                     {isSubmitting ? 'Guardando...' : modalMode === 'create' ? 'Crear' : 'Guardar Cambios'}
                                 </button>
                             </div>
