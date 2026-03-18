@@ -5,6 +5,8 @@ export default function DoctorDiagnoses() {
     const [patients, setPatients] = useState([]);
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [diagnoses, setDiagnoses] = useState([]);
+    const [appointments, setAppointments] = useState([]);
+    const [selectedAppointmentId, setSelectedAppointmentId] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [formData, setFormData] = useState({ symptoms: "", diagnosis: "", prescription: "" });
@@ -31,26 +33,54 @@ export default function DoctorDiagnoses() {
         fetchPatients();
     }, [fetchPatients]);
 
-    const fetchPatientDiagnoses = async (patientId) => {
+    const fetchPatientData = async (patientId) => {
         if (!currentUser) return;
         const token = await currentUser.getIdToken();
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/diagnoses/patient/${patientId}`, {
+            // Fetch Diagnoses
+            const diagRes = await fetch(`${import.meta.env.VITE_API_URL}/api/diagnoses/patient/${patientId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) {
-                const data = await res.json();
-                setDiagnoses(data);
+            if (diagRes.ok) {
+                const diagData = await diagRes.json();
+                setDiagnoses(diagData);
             }
+
+            // Fetch list of ALL appointments to filter for this patient
+            // Optimization can be done later in backend
+            const appRes = await fetch(`${import.meta.env.VITE_API_URL}/api/appointments`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (appRes.ok) {
+                const allApps = await appRes.json();
+                const patientApps = allApps.filter(a => a.patientId === patientId && a.status === 'APPROVED');
+                setAppointments(patientApps);
+            }
+
         } catch (err) {
-            console.error("Failed to fetch diagnoses", err);
+            console.error("Failed to fetch patient data", err);
         }
     };
 
     const handleSelectPatient = (patient) => {
         setSelectedPatient(patient);
         setDiagnoses([]);
-        fetchPatientDiagnoses(patient.uid);
+        setAppointments([]);
+        setSelectedAppointmentId("");
+        setFormData({ symptoms: "", diagnosis: "", prescription: "" });
+        fetchPatientData(patient.uid);
+    };
+
+    const handleAppointmentChange = (e) => {
+        const appId = e.target.value;
+        setSelectedAppointmentId(appId);
+        
+        if (appId) {
+            const app = appointments.find(a => a.id === appId);
+            if (app && !formData.symptoms) {
+                setFormData(prev => ({ ...prev, symptoms: app.reason || "" }));
+            }
+        }
     };
 
     const handleInputChange = (e) => {
@@ -73,6 +103,7 @@ export default function DoctorDiagnoses() {
                 },
                 body: JSON.stringify({
                     patientId: selectedPatient.uid,
+                    appointmentId: selectedAppointmentId || null,
                     symptoms: formData.symptoms,
                     diagnosis: formData.diagnosis,
                     prescription: formData.prescription
@@ -81,7 +112,8 @@ export default function DoctorDiagnoses() {
 
             if (res.ok) {
                 setFormData({ symptoms: "", diagnosis: "", prescription: "" });
-                fetchPatientDiagnoses(selectedPatient.uid);
+                setSelectedAppointmentId("");
+                fetchPatientData(selectedPatient.uid);
             } else {
                 const errData = await res.json();
                 alert(`Error: ${errData.error}`);
@@ -129,6 +161,25 @@ export default function DoctorDiagnoses() {
                             <div className="bg-white rounded-lg shadow p-6">
                                 <h2 className="text-xl font-semibold mb-4 text-indigo-700">Nuevo Diagnóstico - {selectedPatient.displayName || selectedPatient.email}</h2>
                                 <form onSubmit={handleSubmitDiagnosis} className="space-y-4">
+                                    {appointments.length > 0 && (
+                                        <div className="bg-indigo-50 p-4 rounded-md border border-indigo-100 mb-4">
+                                            <label className="block text-sm font-bold text-indigo-900 mb-1">📅 Vincular a Cita Aprobada</label>
+                                            <select 
+                                                value={selectedAppointmentId} 
+                                                onChange={handleAppointmentChange}
+                                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2 bg-white"
+                                            >
+                                                <option value="">-- No vincular a cita específica --</option>
+                                                {appointments.map(app => (
+                                                    <option key={app.id} value={app.id}>
+                                                        {app.date} {app.time} - {app.reason}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-[10px] text-indigo-500 mt-1 italic">Vincular una cita la marcará automáticamente como completada.</p>
+                                        </div>
+                                    )}
+                                    
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Síntomas</label>
                                         <textarea required name="symptoms" value={formData.symptoms} onChange={handleInputChange} rows="2" className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2" placeholder="Síntomas del paciente..."></textarea>
@@ -160,7 +211,14 @@ export default function DoctorDiagnoses() {
                                             return (
                                                 <div key={diag.id} className="bg-gray-50 p-4 rounded-md border border-gray-200">
                                                     <div className="flex justify-between items-start mb-2">
-                                                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{dateStr}</p>
+                                                        <div className="flex flex-col">
+                                                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{dateStr}</p>
+                                                            {diag.appointmentId && (
+                                                                <p className="text-[10px] text-green-600 font-bold mt-1 inline-flex items-center">
+                                                                    <span className="mr-1">✅</span> Cita Vinculada
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                         <p className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">Por: {diag.doctorName}</p>
                                                     </div>
                                                     <div className="space-y-2 mt-3">

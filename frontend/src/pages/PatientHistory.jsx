@@ -76,6 +76,11 @@ export default function PatientHistory() {
                                     <div className="text-left sm:text-right mt-2 sm:mt-0">
                                         <p className="text-gray-800 font-medium">{formattedDate}</p>
                                         <p className="text-gray-500 text-sm">{formattedTime}</p>
+                                        {diag.appointmentId && (
+                                            <p className="text-[10px] text-green-600 font-bold mt-1 inline-flex items-center sm:justify-end w-full">
+                                                <span className="mr-1">✅</span> Cita Vinculada
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="p-6 space-y-4">

@@ -110,15 +110,25 @@ export default function PatientAppointments() {
                                                 <p className="font-bold text-gray-900">{app.date} a las {app.time}</p>
                                                 <p className="text-sm text-gray-600">{app.reason}</p>
                                             </div>
-                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                                app.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
-                                                app.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                                                app.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' :
-                                                'bg-yellow-100 text-yellow-800'
+                                            <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${
+                                                app.status === 'APPROVED' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                app.status === 'REJECTED' ? 'bg-red-50 text-red-700 border-red-100' :
+                                                app.status === 'COMPLETED' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
+                                                'bg-yellow-50 text-yellow-700 border-yellow-100'
                                             }`}>
                                                 {app.status}
                                             </span>
                                         </div>
+                                        {app.status === 'COMPLETED' && (
+                                            <div className="mt-3 flex justify-end">
+                                                <Link 
+                                                    to="/patient/history" 
+                                                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center bg-indigo-50 px-2 py-1 rounded"
+                                                >
+                                                    <span className="mr-1">📋</span> Ver Diagnóstico
+                                                </Link>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
