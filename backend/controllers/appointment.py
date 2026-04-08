@@ -2,9 +2,9 @@ from flask import jsonify, request, g
 from firebase_admin import firestore
 
 class AppointmentController:
-    def __init__(self, app, db, middleware):
+    def __init__(self, app, appointment_repo, middleware):
         self.app = app
-        self.db = db
+        self.appointment_repo = appointment_repo
         self.middleware = middleware
         self._register_routes()
 
@@ -41,8 +41,8 @@ class AppointmentController:
                 'createdAt': firestore.SERVER_TIMESTAMP
             }
             
-            _, doc_ref = self.db.collection('appointments').add(new_appointment)
-            return jsonify({'message': 'Appointment requested successfully', 'id': doc_ref.id}), 201
+            doc_id = self.appointment_repo.create(new_appointment)
+            return jsonify({'message': 'Appointment requested successfully', 'id': doc_id}), 201
         except Exception as e:
             print(f"Error creating appointment: {e}")
             return jsonify({'error': str(e)}), 500
@@ -54,19 +54,10 @@ class AppointmentController:
         
         try:
             if user_role == 'PATIENT':
-                query = self.db.collection('appointments').where('patientId', '==', user_uid)
+                appointments = self.appointment_repo.get_by_patient_id(user_uid)
             else:
-                query = self.db.collection('appointments')
+                appointments = self.appointment_repo.get_all()
                 
-            docs = query.stream()
-            appointments = []
-            for doc in docs:
-                item = doc.to_dict()
-                item['id'] = doc.id
-                appointments.append(item)
-                
-            appointments.sort(key=lambda x: (x.get('date', ''), x.get('time', '')), reverse=True)
-            
             return jsonify(appointments), 200
         except Exception as e:
             print(f"Error listing appointments: {e}")
@@ -82,11 +73,11 @@ class AppointmentController:
             return jsonify({'error': 'Invalid status', 'allowed': ALLOWED_STATUSES}), 400
             
         try:
-            app_ref = self.db.collection('appointments').document(appointment_id)
-            if not app_ref.get().exists:
+            doc = self.appointment_repo.get_by_id(appointment_id)
+            if not doc:
                 return jsonify({'error': 'Appointment not found'}), 404
                 
-            app_ref.update({
+            self.appointment_repo.update(appointment_id, {
                 'status': new_status,
                 'updatedAt': firestore.SERVER_TIMESTAMP,
                 'processedBy': g.user['uid'],

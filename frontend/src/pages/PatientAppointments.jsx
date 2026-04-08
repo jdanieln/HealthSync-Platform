@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
+import { appointmentService } from "../services/appointmentService";
 
 export default function PatientAppointments() {
     const [appointments, setAppointments] = useState([]);
@@ -12,15 +13,9 @@ export default function PatientAppointments() {
 
     const fetchAppointments = useCallback(async () => {
         if (!currentUser) return;
-        const token = await currentUser.getIdToken();
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/appointments`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setAppointments(data);
-            }
+            const data = await appointmentService.getAppointments(currentUser);
+            setAppointments(data);
         } catch (err) {
             console.error("Failed to fetch appointments", err);
         }
@@ -39,29 +34,15 @@ export default function PatientAppointments() {
         if (!currentUser || isSubmitting) return;
 
         setIsSubmitting(true);
-        const token = await currentUser.getIdToken();
-
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/appointments`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(formData)
-            });
-
-            if (res.ok) {
-                setFormData({ date: "", time: "", reason: "" });
-                fetchAppointments();
-                showNotification("Cita solicitada correctamente.", "success");
-            } else {
-                const errData = await res.json();
-                showNotification(`Error: ${errData.error}`, "error");
-            }
+            await appointmentService.createAppointment(formData, currentUser);
+            
+            setFormData({ date: "", time: "", reason: "" });
+            fetchAppointments();
+            showNotification("Cita solicitada correctamente.", "success");
         } catch (err) {
             console.error("Error creating appointment", err);
-            showNotification("Error al solicitar la cita.", "error");
+            showNotification(`Error: ${err.message || 'al solicitar la cita.'}`, "error");
         } finally {
             setIsSubmitting(false);
         }

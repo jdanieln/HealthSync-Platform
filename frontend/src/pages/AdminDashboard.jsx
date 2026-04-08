@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
+import { userService } from "../services/userService";
 
 export default function AdminDashboard() {
     const [users, setUsers] = useState([]);
@@ -15,15 +16,9 @@ export default function AdminDashboard() {
 
     const fetchUsers = useCallback(async () => {
         if (!currentUser) return;
-        const token = await currentUser.getIdToken();
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/users`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setUsers(data);
-            }
+            const data = await userService.getUsers(currentUser);
+            setUsers(data);
         } catch (err) {
             console.error("Failed to fetch users", err);
         }
@@ -60,39 +55,22 @@ export default function AdminDashboard() {
         if (!currentUser || isSubmitting) return;
 
         setIsSubmitting(true);
-        const token = await currentUser.getIdToken();
-
         try {
-            let url = `${import.meta.env.VITE_API_URL}/api/admin/users`;
-            let method = 'POST';
             let bodyData = { ...formData };
 
             if (modalMode === 'edit') {
-                url = `${url}/${selectedUser.uid}`;
-                method = 'PUT';
                 delete bodyData.email;
-            }
-
-            const res = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(bodyData)
-            });
-
-            if (res.ok) {
-                await fetchUsers();
-                closeModal();
-                showNotification(`Usuario ${modalMode === 'create' ? 'creado' : 'actualizado'} correctamente.`, "success");
+                await userService.updateUser(selectedUser.uid, bodyData, currentUser);
             } else {
-                const errData = await res.json();
-                showNotification(`Error: ${errData.error || 'Fallo al guardar usuario'}`, "error");
+                await userService.createUser(bodyData, currentUser);
             }
+
+            await fetchUsers();
+            closeModal();
+            showNotification(`Usuario ${modalMode === 'create' ? 'creado' : 'actualizado'} correctamente.`, "success");
         } catch (err) {
             console.error("Error saving user", err);
-            showNotification("Error al guardar usuario.", "error");
+            showNotification(`Error: ${err.message || 'Fallo al guardar usuario'}`, "error");
         } finally {
             setIsSubmitting(false);
         }
@@ -111,22 +89,13 @@ export default function AdminDashboard() {
         if (!confirmed) return;
 
         setIsSubmitting(true);
-        const token = await currentUser.getIdToken();
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/users/${uid}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (res.ok) {
-                await fetchUsers();
-                showNotification("Usuario eliminado correctamente.", "success");
-            } else {
-                const errData = await res.json();
-                showNotification(`No se pudo eliminar el usuario: ${errData.error}`, "error");
-            }
+            await userService.deleteUser(uid, currentUser);
+            await fetchUsers();
+            showNotification("Usuario eliminado correctamente.", "success");
         } catch (err) {
             console.error("Error deleting user", err);
+            showNotification(`No se pudo eliminar el usuario: ${err.message}`, "error");
         } finally {
             setIsSubmitting(false);
         }

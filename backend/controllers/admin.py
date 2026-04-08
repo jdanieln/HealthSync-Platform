@@ -1,10 +1,10 @@
 from flask import jsonify, request
-from firebase_admin import auth, firestore
+from firebase_admin import firestore
 
 class AdminController:
-    def __init__(self, app, db, middleware):
+    def __init__(self, app, user_repo, middleware):
         self.app = app
-        self.db = db
+        self.user_repo = user_repo
         self.middleware = middleware
         self._register_routes()
 
@@ -33,15 +33,7 @@ class AdminController:
 
     def list_users(self):
         """List all users for management."""
-        users_ref = self.db.collection('users')
-        docs = users_ref.stream()
-        
-        users = []
-        for doc in docs:
-            user = doc.to_dict()
-            user['uid'] = doc.id
-            users.append(user)
-            
+        users = self.user_repo.get_all()
         return jsonify(users)
 
     def create_user(self):
@@ -59,12 +51,9 @@ class AdminController:
             return jsonify({'error': 'Email is required'}), 400
 
         try:
-            user_record = auth.create_user(
-                email=email,
-                display_name=display_name
-            )
+            user_record = self.user_repo.create_auth_user(email, display_name)
             
-            self.db.collection('users').document(user_record.uid).set({
+            self.user_repo.create(user_record.uid, {
                 'email': email,
                 'displayName': display_name,
                 'role': role,
@@ -84,8 +73,8 @@ class AdminController:
         
         ALLOWED_ROLES = ['SUPER_ADMIN', 'DOCTOR', 'ASSISTANT', 'PATIENT']
         
-        user_ref = self.db.collection('users').document(uid)
-        if not user_ref.get().exists:
+        existing_doc = self.user_repo.get_by_uid(uid)
+        if not existing_doc:
             return jsonify({'error': 'User not found in Firestore'}), 404
             
         update_data = {}
@@ -97,21 +86,21 @@ class AdminController:
         if new_display_name is not None:
             update_data['displayName'] = new_display_name
             try:
-                 auth.update_user(uid, display_name=new_display_name)
+                 self.user_repo.update_auth_user(uid, new_display_name)
             except Exception as e:
                  print(f"Error updating display name in auth: {e}")
                  return jsonify({'error': str(e)}), 500
 
         if update_data:
-            user_ref.update(update_data)
+            self.user_repo.update(uid, update_data)
             
         return jsonify({'message': f'User updated successfully'})
 
     def delete_user(self, uid):
         """Delete a user from Firebase Auth and Firestore."""
         try:
-            auth.delete_user(uid)
-            self.db.collection('users').document(uid).delete()
+            self.user_repo.delete_auth_user(uid)
+            self.user_repo.delete(uid)
             return jsonify({'message': 'User deleted successfully'})
         except Exception as e:
             print(f"Error deleting user: {e}")
@@ -120,15 +109,7 @@ class AdminController:
     def list_patients(self):
         """Returns a list of all users with PATIENT role."""
         try:
-            users_ref = self.db.collection('users').where('role', '==', 'PATIENT')
-            docs = users_ref.stream()
-            
-            patients = []
-            for doc in docs:
-                user = doc.to_dict()
-                user['uid'] = doc.id
-                patients.append(user)
-                
+            patients = self.user_repo.get_patients()
             return jsonify(patients), 200
         except Exception as e:
              print(f"Error listing patients: {e}")

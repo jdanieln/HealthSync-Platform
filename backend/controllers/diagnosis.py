@@ -2,9 +2,11 @@ from flask import jsonify, request, g
 from firebase_admin import firestore
 
 class DiagnosisController:
-    def __init__(self, app, db, middleware):
+    def __init__(self, app, diagnosis_repo, user_repo, appointment_repo, middleware):
         self.app = app
-        self.db = db
+        self.diagnosis_repo = diagnosis_repo
+        self.user_repo = user_repo
+        self.appointment_repo = appointment_repo
         self.middleware = middleware
         self._register_routes()
 
@@ -30,9 +32,8 @@ class DiagnosisController:
         try:
             appointment_id = data.get('appointmentId')
             
-            patient_ref = self.db.collection('users').document(patient_uid)
-            patient_doc = patient_ref.get()
-            if not patient_doc.exists:
+            patient_doc = self.user_repo.get_by_uid(patient_uid)
+            if not patient_doc:
                  return jsonify({'error': 'Patient not found'}), 404
                  
             new_diagnosis = {
@@ -46,15 +47,15 @@ class DiagnosisController:
                 'createdAt': firestore.SERVER_TIMESTAMP
             }
             
-            _, doc_ref = self.db.collection('diagnoses').add(new_diagnosis)
+            doc_id = self.diagnosis_repo.create(new_diagnosis)
             
             if appointment_id:
-                self.db.collection('appointments').document(appointment_id).update({
+                self.appointment_repo.update(appointment_id, {
                     'status': 'COMPLETED',
                     'updatedAt': firestore.SERVER_TIMESTAMP
                 })
                 
-            return jsonify({'message': 'Diagnosis created and appointment completed', 'id': doc_ref.id}), 201
+            return jsonify({'message': 'Diagnosis created and appointment completed', 'id': doc_id}), 201
             
         except Exception as e:
             print(f"Error creating diagnosis: {e}")
@@ -72,17 +73,7 @@ class DiagnosisController:
              return jsonify({'error': 'Forbidden', 'message': 'Insufficient Permissions'}), 403
 
         try:
-            diagnoses_ref = self.db.collection('diagnoses').where('patientId', '==', patient_uid)
-            docs = diagnoses_ref.stream()
-            
-            diagnoses = []
-            for doc in docs:
-                item = doc.to_dict()
-                item['id'] = doc.id
-                diagnoses.append(item)
-                
-            diagnoses.sort(key=lambda x: x.get('createdAt').timestamp() if x.get('createdAt') else 0, reverse=True)
-                
+            diagnoses = self.diagnosis_repo.get_by_patient_id(patient_uid)
             return jsonify(diagnoses), 200
             
         except Exception as e:

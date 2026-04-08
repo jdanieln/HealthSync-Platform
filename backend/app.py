@@ -11,6 +11,8 @@ from controllers.admin import AdminController
 from controllers.diagnosis import DiagnosisController
 from controllers.appointment import AppointmentController
 
+from repositories import UserRepository, AppointmentRepository, DiagnosisRepository
+
 class HealthSyncApp:
     def __init__(self):
         dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
@@ -20,6 +22,10 @@ class HealthSyncApp:
         self.database = Database()
         self.db = self.database.get_db()
         self.middleware = SecurityMiddleware(self.db)
+        
+        self.user_repo = UserRepository(self.db)
+        self.appointment_repo = AppointmentRepository(self.db)
+        self.diagnosis_repo = DiagnosisRepository(self.db)
         
         self._setup_cors()
         self._register_controllers()
@@ -40,11 +46,11 @@ class HealthSyncApp:
             return jsonify({}), 200
 
     def _register_controllers(self):
-        AuthController(self.app, self.db, self.middleware)
+        AuthController(self.app, self.user_repo, self.diagnosis_repo, self.middleware)
         HealthController(self.app, self.db)
-        AdminController(self.app, self.db, self.middleware)
-        DiagnosisController(self.app, self.db, self.middleware)
-        AppointmentController(self.app, self.db, self.middleware)
+        AdminController(self.app, self.user_repo, self.middleware)
+        DiagnosisController(self.app, self.diagnosis_repo, self.user_repo, self.appointment_repo, self.middleware)
+        AppointmentController(self.app, self.appointment_repo, self.middleware)
 
     def run(self, **kwargs):
         self.app.run(**kwargs)

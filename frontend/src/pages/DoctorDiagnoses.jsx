@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
+import { patientService } from "../services/userService";
+import { diagnosisService } from "../services/diagnosisService";
+import { appointmentService } from "../services/appointmentService";
 
 export default function DoctorDiagnoses() {
     const [patients, setPatients] = useState([]);
@@ -17,15 +20,9 @@ export default function DoctorDiagnoses() {
 
     const fetchPatients = useCallback(async () => {
         if (!currentUser) return;
-        const token = await currentUser.getIdToken();
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/doctors/patients`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setPatients(data);
-            }
+            const data = await patientService.getPatients(currentUser);
+            setPatients(data);
         } catch (err) {
             console.error("Failed to fetch patients", err);
         }
@@ -37,27 +34,16 @@ export default function DoctorDiagnoses() {
 
     const fetchPatientData = async (patientId) => {
         if (!currentUser) return;
-        const token = await currentUser.getIdToken();
         try {
             // Fetch Diagnoses
-            const diagRes = await fetch(`${import.meta.env.VITE_API_URL}/api/diagnoses/patient/${patientId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (diagRes.ok) {
-                const diagData = await diagRes.json();
-                setDiagnoses(diagData);
-            }
+            const diagData = await diagnosisService.getPatientDiagnoses(patientId, currentUser);
+            setDiagnoses(diagData);
 
             // Fetch list of ALL appointments to filter for this patient
             // Optimization can be done later in backend
-            const appRes = await fetch(`${import.meta.env.VITE_API_URL}/api/appointments`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (appRes.ok) {
-                const allApps = await appRes.json();
-                const patientApps = allApps.filter(a => a.patientId === patientId && a.status === 'APPROVED');
-                setAppointments(patientApps);
-            }
+            const allApps = await appointmentService.getAppointments(currentUser);
+            const patientApps = allApps.filter(a => a.patientId === patientId && a.status === 'APPROVED');
+            setAppointments(patientApps);
 
         } catch (err) {
             console.error("Failed to fetch patient data", err);
@@ -94,36 +80,23 @@ export default function DoctorDiagnoses() {
         if (!currentUser || !selectedPatient || isSubmitting) return;
 
         setIsSubmitting(true);
-        const token = await currentUser.getIdToken();
 
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/diagnoses`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    patientId: selectedPatient.uid,
-                    appointmentId: selectedAppointmentId || null,
-                    symptoms: formData.symptoms,
-                    diagnosis: formData.diagnosis,
-                    prescription: formData.prescription
-                })
-            });
+            await diagnosisService.createDiagnosis({
+                patientId: selectedPatient.uid,
+                appointmentId: selectedAppointmentId || null,
+                symptoms: formData.symptoms,
+                diagnosis: formData.diagnosis,
+                prescription: formData.prescription
+            }, currentUser);
 
-            if (res.ok) {
-                setFormData({ symptoms: "", diagnosis: "", prescription: "" });
-                setSelectedAppointmentId("");
-                await fetchPatientData(selectedPatient.uid);
-                showNotification("Diagnóstico guardado correctamente.", "success");
-            } else {
-                const errData = await res.json();
-                showNotification(`Error: ${errData.error}`, "error");
-            }
+            setFormData({ symptoms: "", diagnosis: "", prescription: "" });
+            setSelectedAppointmentId("");
+            await fetchPatientData(selectedPatient.uid);
+            showNotification("Diagnóstico guardado correctamente.", "success");
         } catch (err) {
             console.error("Error creating diagnosis", err);
-            showNotification("Error al guardar el diagnóstico.", "error");
+            showNotification(`Error: ${err.message || 'al guardar el diagnóstico.'}`, "error");
         } finally {
             setIsSubmitting(false);
         }

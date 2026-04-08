@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
+import { appointmentService } from "../services/appointmentService";
+import { diagnosisService } from "../services/diagnosisService";
 
 export default function DoctorAppointments() {
     const [appointments, setAppointments] = useState([]);
@@ -15,15 +17,9 @@ export default function DoctorAppointments() {
 
     const fetchAppointments = useCallback(async () => {
         if (!currentUser) return;
-        const token = await currentUser.getIdToken();
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/appointments`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setAppointments(data);
-            }
+            const data = await appointmentService.getAppointments(currentUser);
+            setAppointments(data);
         } catch (err) {
             console.error("Failed to fetch appointments", err);
         }
@@ -36,25 +32,13 @@ export default function DoctorAppointments() {
     const handleUpdateStatus = async (appointmentId, newStatus) => {
         if (!currentUser || isSubmitting) return;
         setIsSubmitting(true);
-        const token = await currentUser.getIdToken();
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/appointments/${appointmentId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ status: newStatus })
-            });
-
-            if (res.ok) {
-                await fetchAppointments();
-                showNotification(`Cita ${newStatus === 'APPROVED' ? 'aprobada' : 'rechazada'} correctamente.`, "success");
-            } else {
-                showNotification("Error al actualizar la cita.", "error");
-            }
+            await appointmentService.updateAppointmentStatus(appointmentId, newStatus, currentUser);
+            await fetchAppointments();
+            showNotification(`Cita ${newStatus === 'APPROVED' ? 'aprobada' : 'rechazada'} correctamente.`, "success");
         } catch (err) {
             console.error("Error updating appointment", err);
+            showNotification("Error al actualizar la cita.", "error");
         } finally {
             setIsSubmitting(false);
         }
@@ -71,33 +55,21 @@ export default function DoctorAppointments() {
         if (!currentUser || !selectedApp || isSubmitting) return;
 
         setIsSubmitting(true);
-        const token = await currentUser.getIdToken();
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/diagnoses`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    patientId: selectedApp.patientId,
-                    appointmentId: selectedApp.id,
-                    symptoms: diagForm.symptoms,
-                    diagnosis: diagForm.diagnosis,
-                    prescription: diagForm.prescription
-                })
-            });
+            await diagnosisService.createDiagnosis({
+                patientId: selectedApp.patientId,
+                appointmentId: selectedApp.id,
+                symptoms: diagForm.symptoms,
+                diagnosis: diagForm.diagnosis,
+                prescription: diagForm.prescription
+            }, currentUser);
 
-            if (res.ok) {
-                setIsDiagModalOpen(false);
-                await fetchAppointments();
-                showNotification("Diagnóstico registrado correctamente.", "success");
-            } else {
-                const errData = await res.json();
-                showNotification(`Error: ${errData.error}`, "error");
-            }
+            setIsDiagModalOpen(false);
+            await fetchAppointments();
+            showNotification("Diagnóstico registrado correctamente.", "success");
         } catch (err) {
             console.error("Error saving diagnosis", err);
+            showNotification(`Error: ${err.message || "al guardar el diagnóstico."}`, "error");
         } finally {
             setIsSubmitting(false);
         }

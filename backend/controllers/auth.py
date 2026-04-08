@@ -2,9 +2,10 @@ from flask import jsonify, request, g
 from firebase_admin import firestore
 
 class AuthController:
-    def __init__(self, app, db, middleware):
+    def __init__(self, app, user_repo, diagnosis_repo, middleware):
         self.app = app
-        self.db = db
+        self.user_repo = user_repo
+        self.diagnosis_repo = diagnosis_repo
         self.middleware = middleware
         self._register_routes()
 
@@ -23,48 +24,44 @@ class AuthController:
         
         print(f"DEBUG: sync_user called for UID: {uid}")
         
-        user_ref = self.db.collection('users').document(uid)
-        doc = user_ref.get()
+        existing_doc = self.user_repo.get_by_uid(uid)
         
-        if not doc.exists:
+        if not existing_doc:
             req_json = request.get_json(silent=True) or {}
             email = req_json.get('email', '')
             
-            existing_users = self.db.collection('users').where('email', '==', email).limit(1).get()
+            old_user, old_ref = self.user_repo.get_by_email(email)
             
-            if existing_users:
+            if old_user:
                 print(f"DEBUG: sync_user - Found existing user by email. Migrating old record to new Google UID {uid}")
-                old_doc = existing_users[0]
-                old_data = old_doc.to_dict()
                 
-                user_ref.set(old_data)
-                old_doc.reference.delete()
+                old_uid = old_user.pop('uid', None)
+                self.user_repo.create(uid, old_user)
+                if old_uid:
+                    self.user_repo.delete(old_uid)
                 
                 try:
-                     old_uid = old_doc.id
-                     diagnoses_ref = self.db.collection('diagnoses').where('patientId', '==', old_uid).stream()
-                     for d in diagnoses_ref:
-                          d.reference.update({'patientId': uid})
+                     self.diagnosis_repo.update_patient_id(old_uid, uid)
                      print(f"DEBUG: Migrated diagnoses to new UID {uid}")
                 except Exception as e:
                      print(f"Error migrating diagnoses: {e}")
                      
-                return jsonify({'message': 'User synced and migrated', 'role': old_data.get('role')})
+                return jsonify({'message': 'User synced and migrated', 'role': old_user.get('role')})
                 
             else:
                 print(f"DEBUG: sync_user - Creating new user for {uid}")
-                new_user = {
+                new_user_data = {
                     'email': email,
                     'displayName': req_json.get('displayName', ''),
                     'role': 'PATIENT',
                     'createdAt': firestore.SERVER_TIMESTAMP
                 }
-                user_ref.set(new_user)
+                self.user_repo.create(uid, new_user_data)
                 return jsonify({'message': 'User created', 'role': 'PATIENT'})
         else:
-            current_role = user_data.get('role')
+            current_role = existing_doc.get('role')
             if current_role == 'GUEST' and 'original_uid' in user_data:
-                 current_role = user_data.get('role', 'PATIENT')
+                 current_role = existing_doc.get('role', 'PATIENT')
                  
             print(f"DEBUG: sync_user - User exists. Returning role: {current_role}")
             return jsonify({'message': 'User synced', 'role': current_role})

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
+import { diagnosisService } from "../services/diagnosisService";
 
 export default function PatientHistory() {
     const [diagnoses, setDiagnoses] = useState([]);
@@ -9,18 +10,10 @@ export default function PatientHistory() {
 
     const fetchMyHistory = useCallback(async () => {
         if (!currentUser) return;
-        const token = await currentUser.getIdToken();
         try {
             setLoading(true);
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/diagnoses/patient/${currentUser.uid}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setDiagnoses(data);
-            } else {
-                console.error("Failed to load history");
-            }
+            const data = await diagnosisService.getPatientDiagnoses(currentUser.uid, currentUser);
+            setDiagnoses(data);
         } catch (err) {
             console.error("Failed to fetch history", err);
         } finally {
